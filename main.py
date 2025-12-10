@@ -60,7 +60,7 @@ app = FastAPI(title="ORISOD Enzyme® Voice Assistant API", version="1.0.0")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly in production
+    allow_origins=["https://call-asist.sistems-mik3.com"],  # Configure this properly in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
