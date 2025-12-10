@@ -69,10 +69,10 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-async def startup_event():
+def startup_event():
     """Initialize database on startup."""
     print("Initializing database...")
-    await init_db()
+    init_db()
     print("Database initialized successfully!")
 
 

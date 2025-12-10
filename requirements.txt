@@ -11,5 +11,4 @@ pyyaml
 
 # Database
 sqlalchemy
-asyncpg
 psycopg2-binary

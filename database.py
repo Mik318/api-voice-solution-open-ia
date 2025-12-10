@@ -1,10 +1,10 @@
 """Database configuration and session management."""
 import os
-from typing import AsyncGenerator, Optional
+from typing import Generator
 
 from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
 
 from models import Base
 
@@ -29,59 +29,54 @@ if DATABASE_URL:
 
 # If DATABASE_URL is valid, set up the database
 if DATABASE_URL:
-    # Convert postgresql:// to postgresql+asyncpg:// for async support
-    if DATABASE_URL.startswith("postgresql://"):
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-    
     try:
-        # Create async engine
-        engine = create_async_engine(
+        # Create engine (no need to convert to asyncpg for sync)
+        engine = create_engine(
             DATABASE_URL,
             echo=False,  # Set to True for debugging
-            future=True,
         )
         
-        # Create async session factory
-        async_session_maker = sessionmaker(
-            engine, class_=AsyncSession, expire_on_commit=False
+        # Create session factory
+        SessionLocal = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=engine
         )
         print("✅ Database configured successfully")
     except Exception as e:
         print(f"⚠️  ERROR: Failed to configure database: {e}")
         print("⚠️  Database features disabled.")
         engine = None
-        async_session_maker = None
+        SessionLocal = None
 else:
     engine = None
-    async_session_maker = None
+    SessionLocal = None
     if DATABASE_URL is None and os.getenv("DATABASE_URL") is None:
         print("⚠️  INFO: DATABASE_URL not set. Database features disabled.")
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for getting async database sessions."""
-    if not async_session_maker:
+def get_db() -> Generator[Session, None, None]:
+    """Dependency for getting database sessions."""
+    if not SessionLocal:
         raise RuntimeError(
             "Database not configured. Please set DATABASE_URL environment variable."
         )
     
-    async with async_session_maker() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
-async def init_db():
+def init_db():
     """Initialize database tables."""
     if not engine:
         print("⚠️  Skipping database initialization (DATABASE_URL not configured)")
         return
     
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
+    Base.metadata.create_all(bind=engine)
