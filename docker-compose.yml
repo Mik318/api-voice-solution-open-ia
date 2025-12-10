@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  orisod-voice-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orisod-voice-assistant
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - NGROK_URL=${NGROK_URL}
+      - PORT=8000
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - orisod-network
+
+networks:
+  orisod-network:
+    driver: bridge

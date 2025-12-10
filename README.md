@@ -55,10 +55,50 @@ pip install -r requirements.txt
    uvicorn main:app --port 8000
    ```
 
-5. **Expose with ngrok**
+5. **Expose with ngrok** (para desarrollo local)
    ```bash
    ngrok http 8000
    ```
+
+## 🐳 Despliegue con Docker
+
+### Opción 1: Docker Compose (Desarrollo Local)
+
+```bash
+# Construir y ejecutar
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Detener
+docker-compose down
+```
+
+### Opción 2: Docker Manual
+
+```bash
+# Construir imagen
+docker build -t orisod-voice-assistant .
+
+# Ejecutar contenedor
+docker run -d \
+  --name orisod-assistant \
+  -p 8000:8000 \
+  --env-file .env \
+  orisod-voice-assistant
+```
+
+## 🚀 Despliegue en Dokploy
+
+Para desplegar en producción con Dokploy, consulta la guía completa: **[DEPLOY_DOKPLOY.md](DEPLOY_DOKPLOY.md)**
+
+**Resumen rápido**:
+
+1. Conecta tu repositorio GitHub en Dokploy
+2. Configura las variables de entorno
+3. Dokploy construirá automáticamente usando el `Dockerfile`
+4. Tu aplicación estará disponible con SSL automático
 
 ## Configuration
 
