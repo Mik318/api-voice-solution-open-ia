@@ -93,3 +93,125 @@ def init_db():
         print("⚠️  The application will start but database features may not work.")
         print("⚠️  Please check your DATABASE_URL and PostgreSQL connection.")
 
+
+def create_call(call_sid: str, user_phone: str) -> int:
+    """Create a new call record in the database.
+    
+    Args:
+        call_sid: Twilio call SID
+        user_phone: User's phone number
+        
+    Returns:
+        The ID of the created call record
+    """
+    if not SessionLocal:
+        print("⚠️  Database not configured, skipping call creation")
+        return None
+    
+    from models import Call
+    
+    db = SessionLocal()
+    try:
+        call = Call(
+            call_sid=call_sid,
+            user_phone=user_phone,
+            interaction_log=[],
+            status="active"
+        )
+        db.add(call)
+        db.commit()
+        db.refresh(call)
+        print(f"✅ Created call record: {call.id} for SID: {call_sid}")
+        return call.id
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️  Error creating call record: {e}")
+        return None
+    finally:
+        db.close()
+
+
+def update_call_interaction(call_sid: str, user_text: str = None, ai_text: str = None, timestamp: int = None):
+    """Update call interaction log with new user or AI message.
+    
+    Args:
+        call_sid: Twilio call SID
+        user_text: User's transcribed text (optional)
+        ai_text: AI's response text (optional)
+        timestamp: Unix timestamp in milliseconds
+    """
+    if not SessionLocal:
+        print("⚠️  Database not configured, skipping interaction update")
+        return
+    
+    from models import Call
+    import time
+    
+    if timestamp is None:
+        timestamp = int(time.time() * 1000)
+    
+    db = SessionLocal()
+    try:
+        call = db.query(Call).filter(Call.call_sid == call_sid).first()
+        if not call:
+            print(f"⚠️  Call not found: {call_sid}")
+            return
+        
+        # Get current interaction log
+        interaction_log = call.interaction_log or []
+        
+        # Create new interaction entry
+        interaction = {
+            "user": user_text or "",
+            "ai": ai_text or "",
+            "timestamp": timestamp
+        }
+        
+        interaction_log.append(interaction)
+        
+        # Update the call record
+        call.interaction_log = interaction_log
+        db.commit()
+        print(f"✅ Updated interaction for call {call_sid}")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️  Error updating interaction: {e}")
+    finally:
+        db.close()
+
+
+def finalize_call(call_sid: str, duration: int = None, user_intent: str = None):
+    """Finalize a call by updating its status and duration.
+    
+    Args:
+        call_sid: Twilio call SID
+        duration: Call duration in seconds
+        user_intent: Detected user intent (optional)
+    """
+    if not SessionLocal:
+        print("⚠️  Database not configured, skipping call finalization")
+        return
+    
+    from models import Call
+    
+    db = SessionLocal()
+    try:
+        call = db.query(Call).filter(Call.call_sid == call_sid).first()
+        if not call:
+            print(f"⚠️  Call not found: {call_sid}")
+            return
+        
+        call.status = "completed"
+        if duration is not None:
+            call.duration = duration
+        if user_intent is not None:
+            call.user_intent = user_intent
+        
+        db.commit()
+        print(f"✅ Finalized call {call_sid} (duration: {duration}s)")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️  Error finalizing call: {e}")
+    finally:
+        db.close()
+

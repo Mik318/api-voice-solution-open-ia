@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from twilio.rest import Client
 from twilio.twiml.voice_response import Connect, VoiceResponse
 
-from database import get_db, init_db
+from database import get_db, init_db, create_call, update_call_interaction, finalize_call
 from models import Call
 from schemas import CallListResponse, CallResponse, CallUpdate
 import api_routes
@@ -120,10 +120,7 @@ async def make_call(request: CallRequest):
 async def handle_outgoing_call_get(request: Request):
     """Handle outgoing call webhook (GET) and return TwiML response."""
     response = VoiceResponse()
-    response.say("¡Hola! Gracias por contactar con ORISOD Enzyme.")
-    response.pause(length=1)
-    response.say("Por favor espera mientras te conecto con nuestro asistente especializado.")
-
+    # Conectar directamente al asistente de OpenAI sin mensaje inicial de Twilio
     connect = Connect()
     connect.stream(url=f"wss://{request.url.hostname}/media-stream")
     response.append(connect)
@@ -134,10 +131,7 @@ async def handle_outgoing_call_get(request: Request):
 async def handle_outgoing_call_post(request: Request):
     """Handle outgoing call webhook (POST) and return TwiML response."""
     response = VoiceResponse()
-    response.say("¡Hola! Gracias por contactar con ORISOD Enzyme.")
-    response.pause(length=1)
-    response.say("Por favor espera mientras te conecto con nuestro asistente especializado.")
-
+    # Conectar directamente al asistente de OpenAI sin mensaje inicial de Twilio
     connect = Connect()
     connect.stream(url=f"wss://{request.url.hostname}/media-stream")
     response.append(connect)
@@ -187,10 +181,15 @@ async def handle_media_stream(websocket: WebSocket):
             await send_session_update(openai_ws)
             stream_sid = None
             session_id = None
+            greeting_sent = False
+            call_sid = None
+            call_start_time = None
+            current_user_text = None
+            current_ai_text = None
 
             async def receive_from_twilio():
                 """Receive audio data from Twilio and send it to the OpenAI Realtime API."""
-                nonlocal stream_sid
+                nonlocal stream_sid, greeting_sent, call_sid, call_start_time
                 try:
                     async for message in websocket.iter_text():
                         data = json.loads(message)
@@ -202,15 +201,38 @@ async def handle_media_stream(websocket: WebSocket):
                             await openai_ws.send(json.dumps(audio_append))
                         elif data["event"] == "start":
                             stream_sid = data["start"]["streamSid"]
+                            call_sid = data["start"]["callSid"]
+                            
+                            # Extract phone number from metadata if available
+                            user_phone = data["start"].get("customParameters", {}).get("from", "unknown")
+                            
                             print(f"Incoming stream has started {stream_sid}")
+                            print(f"Call SID: {call_sid}, Phone: {user_phone}")
+                            
+                            # Create call record in database
+                            import time
+                            call_start_time = time.time()
+                            create_call(call_sid, user_phone)
+                            
+                            # Enviar saludo inicial cuando el stream comienza
+                            if not greeting_sent:
+                                await send_initial_greeting(openai_ws)
+                                greeting_sent = True
                 except WebSocketDisconnect:
                     print("Client disconnected.")
+                    
+                    # Finalize call in database
+                    if call_sid and call_start_time:
+                        import time
+                        duration = int(time.time() - call_start_time)
+                        finalize_call(call_sid, duration=duration)
+                    
                     # La conexión se cerrará automáticamente al salir del context manager
                     pass
 
             async def send_to_twilio():
                 """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
-                nonlocal stream_sid, session_id
+                nonlocal stream_sid, session_id, current_user_text, current_ai_text, call_sid
                 try:
                     async for openai_message in openai_ws:
                         response = json.loads(openai_message)
@@ -220,6 +242,40 @@ async def handle_media_stream(websocket: WebSocket):
                             session_id = response["session"]["id"]
                         if response["type"] == "session.updated":
                             print("Session updated successfully:", response)
+                        
+                        # Capture user transcription
+                        if response["type"] == "conversation.item.created":
+                            item = response.get("item", {})
+                            if item.get("type") == "message" and item.get("role") == "user":
+                                # Extract transcription from content
+                                content = item.get("content", [])
+                                for c in content:
+                                    if c.get("type") == "input_audio" and "transcript" in c:
+                                        current_user_text = c["transcript"]
+                                        print(f"📝 User said: {current_user_text}")
+                                    elif c.get("type") == "input_text":
+                                        current_user_text = c.get("text", "")
+                                        print(f"📝 User text: {current_user_text}")
+                        
+                        # Capture AI response text
+                        if response["type"] == "response.text.done":
+                            current_ai_text = response.get("text", "")
+                            print(f"🤖 AI responded: {current_ai_text}")
+                            
+                            # Save interaction to database
+                            if call_sid and (current_user_text or current_ai_text):
+                                import time
+                                timestamp = int(time.time() * 1000)
+                                update_call_interaction(
+                                    call_sid=call_sid,
+                                    user_text=current_user_text,
+                                    ai_text=current_ai_text,
+                                    timestamp=timestamp
+                                )
+                                # Reset for next interaction
+                                current_user_text = None
+                                current_ai_text = None
+                        
                         if response["type"] == "response.audio.delta" and response.get(
                             "delta"
                         ):
@@ -235,8 +291,7 @@ async def handle_media_stream(websocket: WebSocket):
                                 await websocket.send_json(audio_delta)
                             except Exception as e:
                                 print(f"Error processing audio data: {e}")
-                        if response["type"] == "conversation.item.created":
-                            print(f"conversation.item.created event: {response}")
+                        
                         if response["type"] == "input_audio_buffer.speech_started":
                             print("Speech started, interrupting AI response")
 
@@ -291,6 +346,32 @@ async def send_session_update(openai_ws):
     }
     print("Configuring OpenAI session for Spanish language support")
     await openai_ws.send(json.dumps(session_update))
+
+
+async def send_initial_greeting(openai_ws):
+    """Send an initial greeting to trigger immediate AI response in Spanish."""
+    # Enviar un mensaje para que el asistente salude inmediatamente
+    greeting_message = {
+        "type": "conversation.item.create",
+        "item": {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Hola, acabo de conectarme. Por favor salúdame y preséntate."
+                }
+            ]
+        }
+    }
+    await openai_ws.send(json.dumps(greeting_message))
+    
+    # Solicitar una respuesta inmediata
+    response_create = {
+        "type": "response.create"
+    }
+    await openai_ws.send(json.dumps(response_create))
+    print("Initial greeting sent to OpenAI")
 
 
 
