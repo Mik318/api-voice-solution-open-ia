@@ -157,7 +157,7 @@ async def handle_media_stream(websocket: WebSocket):
                 try:
                     async for message in websocket.iter_text():
                         data = json.loads(message)
-                        if data["event"] == "media" and openai_ws.open:
+                        if data["event"] == "media":
                             audio_append = {
                                 "type": "input_audio_buffer.append",
                                 "audio": data["media"]["payload"],
@@ -168,8 +168,8 @@ async def handle_media_stream(websocket: WebSocket):
                             print(f"Incoming stream has started {stream_sid}")
                 except WebSocketDisconnect:
                     print("Client disconnected.")
-                    if openai_ws.open:
-                        await openai_ws.close()
+                    # La conexión se cerrará automáticamente al salir del context manager
+                    pass
 
             async def send_to_twilio():
                 """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
