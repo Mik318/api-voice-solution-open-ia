@@ -12,27 +12,50 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# If DATABASE_URL is not set, use None (database features will be disabled)
+# Validate and clean DATABASE_URL
+if DATABASE_URL:
+    # Strip whitespace
+    DATABASE_URL = DATABASE_URL.strip()
+    
+    # Check if it's empty or just whitespace
+    if not DATABASE_URL:
+        DATABASE_URL = None
+        print("⚠️  WARNING: DATABASE_URL is empty. Database features disabled.")
+    # Check for common malformed patterns
+    elif "::" in DATABASE_URL or DATABASE_URL.endswith(":") or "://" not in DATABASE_URL:
+        print(f"⚠️  WARNING: DATABASE_URL appears malformed: {DATABASE_URL[:50]}...")
+        print("⚠️  Database features disabled. Please check your DATABASE_URL configuration.")
+        DATABASE_URL = None
+
+# If DATABASE_URL is valid, set up the database
 if DATABASE_URL:
     # Convert postgresql:// to postgresql+asyncpg:// for async support
     if DATABASE_URL.startswith("postgresql://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
     
-    # Create async engine
-    engine = create_async_engine(
-        DATABASE_URL,
-        echo=False,  # Set to True for debugging
-        future=True,
-    )
-    
-    # Create async session factory
-    async_session_maker = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    try:
+        # Create async engine
+        engine = create_async_engine(
+            DATABASE_URL,
+            echo=False,  # Set to True for debugging
+            future=True,
+        )
+        
+        # Create async session factory
+        async_session_maker = sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
+        print("✅ Database configured successfully")
+    except Exception as e:
+        print(f"⚠️  ERROR: Failed to configure database: {e}")
+        print("⚠️  Database features disabled.")
+        engine = None
+        async_session_maker = None
 else:
     engine = None
     async_session_maker = None
-    print("⚠️  WARNING: DATABASE_URL not configured. Database features disabled.")
+    if DATABASE_URL is None and os.getenv("DATABASE_URL") is None:
+        print("⚠️  INFO: DATABASE_URL not set. Database features disabled.")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
