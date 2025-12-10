@@ -7,3 +7,8 @@ python-dotenv
 openai
 twilio
 requests
+
+# Database
+sqlalchemy
+asyncpg
+psycopg2-binary

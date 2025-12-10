@@ -2,15 +2,23 @@ import asyncio
 import base64
 import json
 import os
+from typing import List
 
 import websockets
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.websockets import WebSocketDisconnect
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from twilio.rest import Client
 from twilio.twiml.voice_response import Connect, VoiceResponse
+
+from database import get_db, init_db
+from models import Call
+from schemas import CallListResponse, CallResponse, CallUpdate
 
 load_dotenv()
 
@@ -47,7 +55,25 @@ LOG_EVENT_TYPES = [
     "session.created",
 ]
 
-app = FastAPI()
+app = FastAPI(title="ORISOD Enzyme® Voice Assistant API", version="1.0.0")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup."""
+    print("Initializing database...")
+    await init_db()
+    print("Database initialized successfully!")
+
 
 if not OPENAI_API_KEY:
     raise ValueError("Missing the OpenAI API key. Please set it in the .env file.")
@@ -255,3 +281,120 @@ async def send_session_update(openai_ws):
     print("Configuring OpenAI session for Spanish language support")
     await openai_ws.send(json.dumps(session_update))
 
+
+# ============================================================================
+# DATABASE API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/calls", response_model=CallListResponse, tags=["Calls"])
+async def get_calls(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all calls from the database.
+    
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return
+    """
+    # Get total count
+    count_query = select(Call)
+    result = await db.execute(count_query)
+    total = len(result.scalars().all())
+    
+    # Get paginated results
+    query = select(Call).offset(skip).limit(limit).order_by(Call.start_time.desc())
+    result = await db.execute(query)
+    calls = result.scalars().all()
+    
+    return CallListResponse(calls=calls, total=total)
+
+
+@app.get("/api/calls/{call_id}", response_model=CallResponse, tags=["Calls"])
+async def get_call(call_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Get a specific call by ID.
+    
+    - **call_id**: The ID of the call to retrieve
+    """
+    query = select(Call).where(Call.id == call_id)
+    result = await db.execute(query)
+    call = result.scalar_one_or_none()
+    
+    if not call:
+        raise HTTPException(status_code=404, detail=f"Call with id {call_id} not found")
+    
+    return call
+
+
+@app.get("/api/calls/sid/{call_sid}", response_model=CallResponse, tags=["Calls"])
+async def get_call_by_sid(call_sid: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get a specific call by Twilio Call SID.
+    
+    - **call_sid**: The Twilio Call SID
+    """
+    query = select(Call).where(Call.call_sid == call_sid)
+    result = await db.execute(query)
+    call = result.scalar_one_or_none()
+    
+    if not call:
+        raise HTTPException(status_code=404, detail=f"Call with SID {call_sid} not found")
+    
+    return call
+
+
+@app.put("/api/calls/{call_id}", response_model=CallResponse, tags=["Calls"])
+async def update_call(
+    call_id: int,
+    call_update: CallUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update a call's information.
+    
+    - **call_id**: The ID of the call to update
+    - **call_update**: The fields to update
+    """
+    query = select(Call).where(Call.id == call_id)
+    result = await db.execute(query)
+    call = result.scalar_one_or_none()
+    
+    if not call:
+        raise HTTPException(status_code=404, detail=f"Call with id {call_id} not found")
+    
+    # Update fields if provided
+    if call_update.interaction_log is not None:
+        call.interaction_log = [log.dict() for log in call_update.interaction_log]
+    if call_update.status is not None:
+        call.status = call_update.status
+    if call_update.duration is not None:
+        call.duration = call_update.duration
+    if call_update.user_intent is not None:
+        call.user_intent = call_update.user_intent
+    
+    await db.commit()
+    await db.refresh(call)
+    
+    return call
+
+
+@app.delete("/api/calls/{call_id}", tags=["Calls"])
+async def delete_call(call_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Delete a call from the database.
+    
+    - **call_id**: The ID of the call to delete
+    """
+    query = select(Call).where(Call.id == call_id)
+    result = await db.execute(query)
+    call = result.scalar_one_or_none()
+    
+    if not call:
+        raise HTTPException(status_code=404, detail=f"Call with id {call_id} not found")
+    
+    await db.delete(call)
+    await db.commit()
+    
+    return {"message": f"Call {call_id} deleted successfully"}
