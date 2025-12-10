@@ -116,7 +116,7 @@ async def make_call(request: CallRequest):
         return {"error": str(e), "status": "failed"}
 
 
-@app.api_route("/outgoing-call", methods=["GET", "POST"])
+@app.api_route("/outgoing-call", methods=["GET", "POST"], operation_id="handle_outgoing_call")
 async def handle_outgoing_call(request: Request):
     """Handle outgoing call webhook and return TwiML response."""
     response = VoiceResponse()
@@ -130,7 +130,7 @@ async def handle_outgoing_call(request: Request):
     return HTMLResponse(content=str(response), media_type="application/xml")
 
 
-@app.api_route("/recording-status", methods=["POST"])
+@app.api_route("/recording-status", methods=["POST"], operation_id="handle_recording_status")
 async def handle_recording_status(request: Request):
     """Handle recording status updates from Twilio."""
     form_data = await request.form()
@@ -138,16 +138,12 @@ async def handle_recording_status(request: Request):
     recording_sid = form_data.get("RecordingSid")
     call_sid = form_data.get("CallSid")
     recording_url = form_data.get("RecordingUrl")
-    recording_duration = form_data.get("RecordingDuration")
 
-    print(f"Recording status update:")
-    print(f"  Call SID: {call_sid}")
-    print(f"  Recording SID: {recording_sid}")
-    print(f"  Status: {recording_status}")
+    print(f"Recording Status Update: {recording_status} for Call {call_sid}")
+    print(f"Recording SID: {recording_sid}, URL: {recording_url}")
 
     if recording_status == "completed":
         print(f"  Recording URL: {recording_url}")
-        print(f"  Duration: {recording_duration} seconds")
 
     return {"status": "received"}
 
