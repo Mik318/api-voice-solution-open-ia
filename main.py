@@ -59,7 +59,7 @@ if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
 @app.get("/")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "message": "AI Voice Assistant is running!"}
+    return {"status": "healthy", "message": "ORISOD Enzyme® Voice Assistant is running!"}
 
 
 class CallRequest(BaseModel):
@@ -93,9 +93,9 @@ async def make_call(request: CallRequest):
 async def handle_outgoing_call(request: Request):
     """Handle outgoing call webhook and return TwiML response."""
     response = VoiceResponse()
-    response.say("Hello! You are now connected to an AI assistant.")
+    response.say("¡Hola! Gracias por contactar con ORISOD Enzyme.")
     response.pause(length=1)
-    response.say("Please wait while we establish the connection.")
+    response.say("Por favor espera mientras te conecto con nuestro asistente especializado.")
 
     connect = Connect()
     connect.stream(url=f"wss://{request.url.hostname}/media-stream")

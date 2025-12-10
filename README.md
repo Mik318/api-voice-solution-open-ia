@@ -1,20 +1,22 @@
-# AI Calling Agent
+# ORISOD Enzyme® - Asistente de Voz con IA
 
-A real-time voice AI system that integrates OpenAI's Realtime API with Twilio Voice to create intelligent voice conversations. Perfect for customer service, compliance monitoring, and automated calling systems.
+Un sistema de voz con IA en tiempo real especializado en ORISOD Enzyme®, que integra la API Realtime de OpenAI con Twilio Voice para crear conversaciones inteligentes sobre este revolucionario suplemento bioactivo antioxidante. Perfecto para atención al cliente, información de producto y ventas consultivas.
 
 ## Branches
 
 - **[main](https://github.com/intellwe/ai-calling-agent/tree/main)** - OpenAI Realtime API version (streaming, low latency)
 - **[llama3](https://github.com/intellwe/ai-calling-agent/tree/llama3)** - Llama3 via Together AI (traditional, cost-effective)
 
-## Features
+## Características
 
-- **Real-time Voice Processing** - Instant speech recognition and response
-- **Smart Interruption Handling** - Natural conversation flow with speech detection
-- **Flexible Configuration** - Customizable prompts and voice settings
-- **Call Recording** - Automatic recording with compliance features
-- **WebSocket Communication** - Low-latency audio streaming
-- **Production Ready** - Built with FastAPI for scalability
+- **Procesamiento de Voz en Tiempo Real** - Reconocimiento de voz y respuesta instantánea
+- **Conocimiento Especializado en ORISOD** - Información detallada sobre beneficios, componentes y evidencia científica
+- **Consultoría de Salud Personalizada** - Adapta las recomendaciones según las necesidades del cliente
+- **Manejo Inteligente de Interrupciones** - Flujo de conversación natural con detección de voz
+- **Configuración Flexible** - Prompts personalizables y ajustes de voz
+- **Grabación de Llamadas** - Registro automático para seguimiento y mejora continua
+- **Comunicación WebSocket** - Streaming de audio de baja latencia
+- **Listo para Producción** - Construido con FastAPI para escalabilidad
 
 ## Quick Start
 
@@ -30,8 +32,8 @@ A real-time voice AI system that integrates OpenAI's Realtime API with Twilio Vo
 1. **Clone the repository**
 
 ```bash
-   git clone https://github.com/intellwe/ai-calling-agent.git
-   cd ai-calling-agent
+   git clone https://github.com/Mik318/api-voice-solution-open-ia.git
+   cd api-voice-solution-open-ia
 ```
 
 2. **Install dependencies**
@@ -123,9 +125,9 @@ The system creates a bridge between Twilio's voice services and OpenAI's Realtim
 - **Security scan**: `bandit -r .`
 - **Run tests**: `pytest`
 
-### Customizing AI Behavior
+### Personalizar el Comportamiento de la IA
 
-Edit `prompts/system_prompt.txt` to modify the AI's personality and responses.
+Edita `prompts/system_prompt.txt` para modificar la personalidad y respuestas del asistente de ORISOD. El archivo `contexto_orisod.txt` contiene toda la información técnica y científica del producto que el asistente puede utilizar.
 
 ## 🤝 Contributing
 
@@ -135,10 +137,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Author
+## Autor
+
+- [@Mik318](https://github.com/Mik318)
+
+## Créditos Originales
+
+Basado en el proyecto AI Calling Agent de:
 
 - [@FardinHash](https://github.com/FardinHash) -> [LinkedIn](https://linkedin.com/in/fardinkai)
-
 - [@RianaAzad](https://github.com/RianaAzad) -> [LinkedIn](https://linkedin.com/in/riana-azad)
 
 ## ⚠️ Disclaimer
