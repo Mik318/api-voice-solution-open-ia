@@ -34,6 +34,11 @@ if DATABASE_URL:
         engine = create_engine(
             DATABASE_URL,
             echo=False,  # Set to True for debugging
+            pool_pre_ping=True,  # Verify connections before using
+            pool_recycle=3600,  # Recycle connections after 1 hour
+            connect_args={
+                "connect_timeout": 10,  # 10 second timeout
+            }
         )
         
         # Create session factory
@@ -79,4 +84,12 @@ def init_db():
         print("⚠️  Skipping database initialization (DATABASE_URL not configured)")
         return
     
-    Base.metadata.create_all(bind=engine)
+    try:
+        print("Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created successfully")
+    except Exception as e:
+        print(f"⚠️  WARNING: Failed to initialize database: {e}")
+        print("⚠️  The application will start but database features may not work.")
+        print("⚠️  Please check your DATABASE_URL and PostgreSQL connection.")
+
