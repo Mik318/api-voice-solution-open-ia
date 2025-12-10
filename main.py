@@ -116,9 +116,23 @@ async def make_call(request: CallRequest):
         return {"error": str(e), "status": "failed"}
 
 
-@app.api_route("/outgoing-call", methods=["GET", "POST"], operation_id="handle_outgoing_call")
-async def handle_outgoing_call(request: Request):
-    """Handle outgoing call webhook and return TwiML response."""
+@app.get("/outgoing-call", operation_id="handle_outgoing_call_get")
+async def handle_outgoing_call_get(request: Request):
+    """Handle outgoing call webhook (GET) and return TwiML response."""
+    response = VoiceResponse()
+    response.say("¡Hola! Gracias por contactar con ORISOD Enzyme.")
+    response.pause(length=1)
+    response.say("Por favor espera mientras te conecto con nuestro asistente especializado.")
+
+    connect = Connect()
+    connect.stream(url=f"wss://{request.url.hostname}/media-stream")
+    response.append(connect)
+    return HTMLResponse(content=str(response), media_type="application/xml")
+
+
+@app.post("/outgoing-call", operation_id="handle_outgoing_call_post")
+async def handle_outgoing_call_post(request: Request):
+    """Handle outgoing call webhook (POST) and return TwiML response."""
     response = VoiceResponse()
     response.say("¡Hola! Gracias por contactar con ORISOD Enzyme.")
     response.pause(length=1)
