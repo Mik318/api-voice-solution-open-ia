@@ -54,6 +54,7 @@ LOG_EVENT_TYPES = [
     "input_audio_buffer.speech_stopped",
     "input_audio_buffer.speech_started",
     "session.created",
+    "conversation.item.input_audio_transcription.completed",
 ]
 
 app = FastAPI(title="ORISOD Enzyme® Voice Assistant API", version="1.0.0")
@@ -243,24 +244,25 @@ async def handle_media_stream(websocket: WebSocket):
                         if response["type"] == "session.updated":
                             print("Session updated successfully:", response)
                         
-                        # Capture user transcription
-                        if response["type"] == "conversation.item.created":
-                            item = response.get("item", {})
-                            if item.get("type") == "message" and item.get("role") == "user":
-                                # Extract transcription from content
-                                content = item.get("content", [])
-                                for c in content:
-                                    if c.get("type") == "input_audio" and "transcript" in c:
-                                        current_user_text = c["transcript"]
-                                        print(f"📝 User said: {current_user_text}")
-                                    elif c.get("type") == "input_text":
-                                        current_user_text = c.get("text", "")
-                                        print(f"📝 User text: {current_user_text}")
+                        # Capture user transcription from the transcription completed event
+                        if response["type"] == "conversation.item.input_audio_transcription.completed":
+                            transcript = response.get("transcript", "")
+                            if transcript:
+                                current_user_text = transcript
+                                print(f"📝 User said: {current_user_text}")
                         
-                        # Capture AI response text
-                        if response["type"] == "response.text.done":
-                            current_ai_text = response.get("text", "")
-                            print(f"🤖 AI responded: {current_ai_text}")
+                        # Capture AI response text from response.done event
+                        if response["type"] == "response.done":
+                            # Extract transcript from the assistant's message in the output
+                            output = response.get("response", {}).get("output", [])
+                            for item in output:
+                                if item.get("role") == "assistant":
+                                    content = item.get("content", [])
+                                    for c in content:
+                                        if c.get("type") == "audio" and "transcript" in c:
+                                            current_ai_text = c["transcript"]
+                                            print(f"🤖 AI responded: {current_ai_text}")
+                                            break
                             
                             # Save interaction to database
                             if call_sid and (current_user_text or current_ai_text):
