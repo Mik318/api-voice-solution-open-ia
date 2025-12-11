@@ -45,7 +45,7 @@ NGROK_URL = os.getenv("NGROK_URL")
 PORT = int(os.getenv("PORT", 8000))
 
 SYSTEM_MESSAGE = load_prompt("system_prompt")
-VOICE = "alloy"  # Mejor pronunciación en español
+VOICE = "shimmer"  # Mejor voz femenina para español mexicano
 LOG_EVENT_TYPES = [
     "response.content.done",
     "rate_limits.updated",
@@ -366,16 +366,17 @@ async def send_session_update(openai_ws):
             "temperature": 0.8,  # Mayor temperatura para respuestas más naturales
             "turn_detection": {
                 "type": "server_vad",
-                "threshold": 0.5,
-                "prefix_padding_ms": 300,
-                "silence_duration_ms": 500,
+                "threshold": 0.6,  # Umbral más alto para evitar falsos positivos
+                "prefix_padding_ms": 400,  # Más padding para capturar inicio de palabras
+                "silence_duration_ms": 700,  # Más tiempo de silencio para español mexicano
             },
             "input_audio_transcription": {
-                "model": "whisper-1"
+                "model": "whisper-1",
+                "language": "es"  # Forzar español para mejor reconocimiento
             },
         },
     }
-    print("Configuring OpenAI session for Spanish language support")
+    print("Configuring OpenAI session for Mexican Spanish")
     await openai_ws.send(json.dumps(session_update))
 
 
