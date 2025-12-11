@@ -224,7 +224,7 @@ async def handle_media_stream(websocket: WebSocket):
                                 greeting_sent = True
                 except WebSocketDisconnect:
                     print("Client disconnected.")
-                    
+                finally:
                     # Guardar la conversación completa en la base de datos
                     if call_sid and conversation_buffer:
                         print(f"💾 Saving complete conversation ({len(conversation_buffer)} interactions)")
@@ -235,9 +235,6 @@ async def handle_media_stream(websocket: WebSocket):
                         import time
                         duration = int(time.time() - call_start_time)
                         finalize_call(call_sid, duration=duration)
-                    
-                    # La conexión se cerrará automáticamente al salir del context manager
-                    pass
 
             async def send_to_twilio():
                 """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
