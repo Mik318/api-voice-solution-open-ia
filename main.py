@@ -185,6 +185,9 @@ async def handle_media_stream(websocket: WebSocket):
             greeting_sent = False
             call_sid = None
             call_start_time = None
+            
+            # Buffer para acumular la conversación completa
+            conversation_buffer = []
             current_user_text = None
             current_ai_text = None
 
@@ -222,6 +225,11 @@ async def handle_media_stream(websocket: WebSocket):
                 except WebSocketDisconnect:
                     print("Client disconnected.")
                     
+                    # Guardar la conversación completa en la base de datos
+                    if call_sid and conversation_buffer:
+                        print(f"💾 Saving complete conversation ({len(conversation_buffer)} interactions)")
+                        update_call_interaction(call_sid, conversation_buffer)
+                    
                     # Finalize call in database
                     if call_sid and call_start_time:
                         import time
@@ -233,7 +241,7 @@ async def handle_media_stream(websocket: WebSocket):
 
             async def send_to_twilio():
                 """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
-                nonlocal stream_sid, session_id, current_user_text, current_ai_text, call_sid
+                nonlocal stream_sid, session_id, current_user_text, current_ai_text, call_sid, conversation_buffer
                 try:
                     async for openai_message in openai_ws:
                         response = json.loads(openai_message)
@@ -264,18 +272,36 @@ async def handle_media_stream(websocket: WebSocket):
                                             print(f"🤖 AI responded: {current_ai_text}")
                                             break
                             
-                            # Save interaction to database
-                            if call_sid and (current_user_text or current_ai_text):
+                            # Guardar el par de interacción en el buffer solo si tenemos ambos textos
+                            if current_user_text and current_ai_text:
                                 import time
-                                timestamp = int(time.time() * 1000)
-                                update_call_interaction(
-                                    call_sid=call_sid,
-                                    user_text=current_user_text,
-                                    ai_text=current_ai_text,
-                                    timestamp=timestamp
-                                )
-                                # Reset for next interaction
+                                timestamp = time.time()  # Usar timestamp en segundos (float)
+                                
+                                interaction = {
+                                    "user": current_user_text,
+                                    "ai": current_ai_text,
+                                    "timestamp": timestamp
+                                }
+                                conversation_buffer.append(interaction)
+                                print(f"✅ Buffered interaction #{len(conversation_buffer)}: user + ai")
+                                
+                                # Reset para la siguiente interacción
                                 current_user_text = None
+                                current_ai_text = None
+                            elif current_ai_text and not current_user_text:
+                                # Caso especial: saludo inicial de la IA (sin mensaje del usuario)
+                                import time
+                                timestamp = time.time()
+                                
+                                interaction = {
+                                    "user": "",  # Usuario no dijo nada (es el saludo inicial)
+                                    "ai": current_ai_text,
+                                    "timestamp": timestamp
+                                }
+                                conversation_buffer.append(interaction)
+                                print(f"✅ Buffered initial greeting #{len(conversation_buffer)}")
+                                
+                                # Reset
                                 current_ai_text = None
                         
                         if response["type"] == "response.audio.delta" and response.get(
@@ -305,6 +331,11 @@ async def handle_media_stream(websocket: WebSocket):
                             await openai_ws.send(json.dumps(interrupt_message))
                 except Exception as e:
                     print(f"Error in send_to_twilio: {e}")
+                finally:
+                    # Guardar la conversación al terminar el stream de OpenAI
+                    if call_sid and conversation_buffer:
+                        print(f"💾 Saving complete conversation on stream end ({len(conversation_buffer)} interactions)")
+                        update_call_interaction(call_sid, conversation_buffer)
 
             await asyncio.gather(receive_from_twilio(), send_to_twilio())
     
@@ -322,6 +353,7 @@ async def handle_media_stream(websocket: WebSocket):
         
         await websocket.close(code=1011, reason=f"OpenAI connection failed: {error_msg}")
         raise
+
 
 
 async def send_session_update(openai_ws):

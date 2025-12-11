@@ -131,24 +131,19 @@ def create_call(call_sid: str, user_phone: str) -> int:
         db.close()
 
 
-def update_call_interaction(call_sid: str, user_text: str = None, ai_text: str = None, timestamp: int = None):
-    """Update call interaction log with new user or AI message.
+def update_call_interaction(call_sid: str, conversation_log: list):
+    """Update call interaction log with the complete conversation.
     
     Args:
         call_sid: Twilio call SID
-        user_text: User's transcribed text (optional)
-        ai_text: AI's response text (optional)
-        timestamp: Unix timestamp in milliseconds
+        conversation_log: Complete list of conversation interactions in format:
+                         [{"user": "...", "ai": "...", "timestamp": 123456789}, ...]
     """
     if not SessionLocal:
         print("⚠️  Database not configured, skipping interaction update")
         return
     
     from models import Call
-    import time
-    
-    if timestamp is None:
-        timestamp = int(time.time() * 1000)
     
     db = SessionLocal()
     try:
@@ -157,22 +152,10 @@ def update_call_interaction(call_sid: str, user_text: str = None, ai_text: str =
             print(f"⚠️  Call not found: {call_sid}")
             return
         
-        # Get current interaction log
-        interaction_log = call.interaction_log or []
-        
-        # Create new interaction entry
-        interaction = {
-            "user": user_text or "",
-            "ai": ai_text or "",
-            "timestamp": timestamp
-        }
-        
-        interaction_log.append(interaction)
-        
-        # Update the call record
-        call.interaction_log = interaction_log
+        # Update the call record with the complete conversation log
+        call.interaction_log = conversation_log
         db.commit()
-        print(f"✅ Updated interaction for call {call_sid}")
+        print(f"✅ Updated conversation for call {call_sid} ({len(conversation_log)} interactions)")
     except Exception as e:
         db.rollback()
         print(f"⚠️  Error updating interaction: {e}")
